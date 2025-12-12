@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: tariffsnap-webhook
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_API_KEY
+        sync: false
+      - key: GOOGLE_SHEET_ID
+        value: 17t8iwdkzCdXBev13lRmERSH5v1OFaWUfFF8-5Ac8GTU
+      - key: GMAIL_USER
+        sync: false
+      - key: GMAIL_APP_PASSWORD
+        sync: false
+      - key: GOOGLE_CREDENTIALS_JSON
+        sync: false
