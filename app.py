@@ -33,8 +33,8 @@ GMAIL_APP_PASSWORD = os.getenv('GMAIL_APP_PASSWORD')
 stripe.api_key = STRIPE_API_KEY
 
 
-def get_google_sheet_data():
-    """Fetch data from Google Sheets Results tab"""
+def get_google_sheet_data(customer_email=None):
+    """Fetch data from Google Sheets, filtered by customer email if provided"""
     try:
         # Set up Google Sheets credentials
         scope = ['https://spreadsheets.google.com/feeds',
@@ -53,13 +53,66 @@ def get_google_sheet_data():
         
         # Open the Google Sheet
         sheet = client.open_by_key(GOOGLE_SHEET_ID)
-        results_worksheet = sheet.worksheet('Results')
         
-        # Get all values from Results tab
-        data = results_worksheet.get_all_records()
+        # Strategy: The sheet should have a "Products" tab where each row is:
+        # Email | Product | Old Cost | Tariff% | New Cost | Action
+        # OR the Results tab should include an Email column
         
-        logger.info(f"Fetched {len(data)} rows from Google Sheet")
-        return data
+        # Try to get Products sheet first, fall back to Results
+        try:
+            products_worksheet = sheet.worksheet('Products')
+            logger.info("Using 'Products' worksheet")
+        except:
+            # Fall back to Results tab
+            products_worksheet = sheet.worksheet('Results')
+            logger.info("Using 'Results' worksheet")
+        
+        # Get all records
+        all_data = products_worksheet.get_all_records()
+        
+        if not customer_email:
+            # No filter, return all
+            logger.info(f"Fetched {len(all_data)} total rows (no email filter)")
+            return all_data
+        
+        # Filter by customer email
+        # Check if there's an Email column in the data
+        if all_data and 'Email' in all_data[0]:
+            # Filter rows where Email matches
+            customer_data = [
+                row for row in all_data 
+                if row.get('Email', '').lower() == customer_email.lower()
+            ]
+            logger.info(f"Fetched {len(customer_data)} products for customer {customer_email}")
+            return customer_data
+        else:
+            # No Email column - need different approach
+            # Get Form Responses to find customer's timestamp
+            logger.info("No Email column in products data, checking Form Responses")
+            
+            form_responses = sheet.worksheet('Form Responses 1')
+            responses_data = form_responses.get_all_records()
+            
+            # Find customer's submission timestamp
+            customer_timestamp = None
+            for row in responses_data:
+                if row.get('Email', '').lower() == customer_email.lower():
+                    customer_timestamp = row.get('Timestamp')
+                    logger.info(f"Found customer timestamp: {customer_timestamp}")
+                    break
+            
+            if customer_timestamp:
+                # Filter products by matching timestamp
+                customer_data = [
+                    row for row in all_data
+                    if row.get('Timestamp') == customer_timestamp
+                ]
+                logger.info(f"Fetched {len(customer_data)} products for customer by timestamp")
+                return customer_data
+            else:
+                # Customer not found, return empty
+                logger.warning(f"Customer {customer_email} not found in Form Responses")
+                return []
     
     except Exception as e:
         logger.error(f"Error fetching Google Sheet data: {str(e)}")
@@ -260,8 +313,8 @@ def stripe_webhook():
             
             logger.info(f"Processing payment for {customer_email}")
             
-            # Fetch Google Sheet data
-            results_data = get_google_sheet_data()
+            # Fetch Google Sheet data filtered by customer email
+            results_data = get_google_sheet_data(customer_email)
             
             if not results_data:
                 logger.error("No data found in Google Sheet")
