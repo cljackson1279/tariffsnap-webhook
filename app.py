@@ -291,10 +291,10 @@ def stripe_webhook():
         if event['type'] == 'payment_intent.succeeded':
             payment_intent = event['data']['object']
             
-            # Check if payment is $149 (14900 cents)
+            # Check if payment is $59 (5900 cents) - End-of-Year Sale
             amount = payment_intent.get('amount', 0)
-            if amount != 14900:
-                logger.warning(f"Payment amount {amount} does not match expected 14900")
+            if amount != 5900:
+                logger.warning(f"Payment amount {amount} does not match expected 5900")
                 return jsonify({'status': 'ignored', 'reason': 'amount_mismatch'}), 200
             
             # Get customer email from payment intent
